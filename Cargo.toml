@@ -1,0 +1,9 @@
+[package]
+name = "crates_rank"
+version = "0.1.0"
+authors = ["Tim Kuehn <tim@solvvy.com>"]
+
+[dependencies]
+serde = "0.5.0"
+serde_json = "0.5.0"
+serde_macros = "0.5.0"
