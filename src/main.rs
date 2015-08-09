@@ -1,4 +1,4 @@
-#![feature(fs_walk, custom_derive, plugin, iter_arith, convert, result_expect)]
+#![feature(fs_walk, custom_derive, plugin, iter_arith, result_expect)]
 #![plugin(serde_macros)]
 extern crate serde;
 extern crate serde_json;
@@ -58,29 +58,29 @@ fn get_packages(path: &str) -> Vec<Package> {
 fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
     let damp = 0.85;
     let starting_rank = 1.0 / packages.len() as f64;
-    let mut cargo_ranks: HashMap<_, _> = packages.iter().map(|pkg| (pkg.name.as_str(), (pkg, starting_rank))).collect();
+    let mut cargo_ranks: HashMap<_, _> = packages.iter().map(|pkg| (&*pkg.name, (pkg, starting_rank))).collect();
     let mut new_ranks: HashMap<_, _>;
     let mut delta = std::f64::MAX;
     let threshold = 0.000001;
     let iterative_starting_rank = (1.0 - damp) / packages.len() as f64;
     while delta > threshold {
-        new_ranks = packages.iter().map(|pkg| (pkg.name.as_str(), (pkg, iterative_starting_rank))).collect();
+        new_ranks = packages.iter().map(|pkg| (&*pkg.name, (pkg, iterative_starting_rank))).collect();
         for &(pkg, rank) in cargo_ranks.values() {
             let num_deps = pkg.deps.len();
             let boost;
             if num_deps == 0 { // distribute evenly when there are no deps
                 boost = damp * rank / (packages.len() as f64 - 1.0);
                 for dep in packages.iter().filter(|dep| dep.name != pkg.name) {
-                    new_ranks.get_mut(dep.name.as_str()).unwrap().1 += boost;
+                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
                 }
             } else {
                 boost = damp * rank / num_deps as f64;
                 for dep in &pkg.deps {
-                    new_ranks.get_mut(dep.name.as_str()).unwrap().1 += boost;
+                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
                 }
             }
         }
-        delta = cargo_ranks.values().map(|&(pkg, rank)| (new_ranks[pkg.name.as_str()].1 - rank).abs()).sum();
+        delta = cargo_ranks.values().map(|&(pkg, rank)| (new_ranks[&*pkg.name].1 - rank).abs()).sum();
         cargo_ranks.clear();
         swap(&mut cargo_ranks, &mut new_ranks);
         println!("Delta: {}", delta);
