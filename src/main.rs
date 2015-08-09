@@ -64,7 +64,7 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
     let threshold = 0.000001;
     let iterative_starting_rank = (1.0 - damp) / packages.len() as f64;
     while delta > threshold {
-        new_ranks = packages.iter().map(|pkg| (&pkg.name[..], (pkg, iterative_starting_rank))).collect();
+        new_ranks = packages.iter().map(|pkg| (pkg.name.as_str(), (pkg, iterative_starting_rank))).collect();
         for &(pkg, rank) in cargo_ranks.values() {
             let num_deps = pkg.deps.len();
             let boost;
@@ -80,7 +80,7 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
                 }
             }
         }
-        delta = cargo_ranks.values().map(|&(ref pkg, ref rank)| (new_ranks[pkg.name.as_str()].1 - rank).abs()).sum();
+        delta = cargo_ranks.values().map(|&(pkg, rank)| (new_ranks[pkg.name.as_str()].1 - rank).abs()).sum();
         cargo_ranks.clear();
         swap(&mut cargo_ranks, &mut new_ranks);
         println!("Delta: {}", delta);
