@@ -1,4 +1,4 @@
-#![feature(fs_walk, custom_derive, plugin, iter_arith, convert)]
+#![feature(fs_walk, custom_derive, plugin, iter_arith, convert, result_expect)]
 #![plugin(serde_macros)]
 extern crate serde;
 extern crate serde_json;
@@ -76,7 +76,7 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
             } else {
                 boost = damp * rank / num_deps as f64;
                 for dep in &pkg.deps {
-                    (new_ranks.get_mut(dep.name.as_str())).unwrap().1 += boost;
+                    new_ranks.get_mut(dep.name.as_str()).unwrap().1 += boost;
                 }
             }
         }
@@ -91,11 +91,12 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
 }
 
 fn main() {
-    let path = std::env::args().skip(1).next().unwrap();
+    let mut args = std::env::args().skip(1);
+    let path = args.next().unwrap();
     let packages = get_packages(&path);
     let ranks = cargo_rank(&packages);
 
-    for (pkg, rank) in ranks.into_iter().take(10) {
-        println!("{}: {}", pkg.name, rank);
+    for (i, (pkg, rank)) in ranks.into_iter().take(args.next().unwrap().parse().expect("Not a number?")).enumerate() {
+        println!("{}. {} ({})", i + 1, pkg.name, rank);
     }
 }
