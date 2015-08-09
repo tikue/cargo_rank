@@ -2,14 +2,18 @@
 #![plugin(serde_macros)]
 extern crate serde;
 extern crate serde_json;
+extern crate nalgebra;
+
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use serde_json::Deserializer;
 
+use nalgebra::{DMat, DVec, Iterable};
+
 use std::io::{BufReader, BufRead};
 use std::fs::{File, WalkDir, read_dir, walk_dir};
 use std::env::args;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::mem::swap;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -67,21 +71,15 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
         new_ranks = packages.iter().map(|pkg| (&*pkg.name, (pkg, iterative_starting_rank))).collect();
         for &(pkg, rank) in cargo_ranks.values() {
             let num_deps = pkg.deps.len();
-            let boost;
-            if num_deps == 0 { // distribute evenly when there are no deps
-                boost = damp * rank / (packages.len() as f64 - 1.0);
-                for dep in packages.iter().filter(|dep| dep.name != pkg.name) {
-                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
-                }
-            } else {
-                boost = damp * rank / num_deps as f64;
-                for dep in &pkg.deps {
-                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
-                }
+            let boost = damp * rank / num_deps as f64;
+            for dep in &pkg.deps {
+                new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
             }
         }
         delta = cargo_ranks.values().map(|&(pkg, rank)| (new_ranks[&*pkg.name].1 - rank).abs()).sum();
         cargo_ranks.clear();
+        let sum: f64 = new_ranks.values().map(|&(_, rank)| rank).sum();
+        assert!((1.0 - sum.abs()) < 0.0000000001f64);
         swap(&mut cargo_ranks, &mut new_ranks);
         println!("Delta: {}", delta);
     }
@@ -90,13 +88,49 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
     ranks
 }
 
+fn mat_cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
+    let damp = 0.85;
+    let starting_rank = 1.0 / packages.len() as f64;
+    let mut cargo_ranks = DVec::from_elem(packages.len(), starting_rank);
+    let deps: Vec<f64> = packages.iter().flat_map(|pkg| {
+        let deps: HashSet<_> = pkg.deps.iter().map(|dep| &*dep.name).collect();
+        let num_deps = deps.len() as f64;
+        packages.iter().map(move |dep| if deps.contains(&*dep.name) { 1.0 / num_deps } else { 0.0 })
+    }).collect();
+    let deps = DMat::from_row_vec(packages.len(), packages.len(), &deps);
+
+    let mut delta = std::f64::MAX;
+    let threshold = 0.000001;
+    while delta > threshold {
+        let starting_rank = (1.0 - damp) / packages.len() as f64;
+        let starting_ranks = DVec::from_elem(packages.len(), starting_rank);
+        let new_ranks = starting_ranks + (deps.clone() * cargo_ranks.clone()) * damp;
+        delta = cargo_ranks.iter().zip(new_ranks.iter()).map(|(old, new)| (old - new).abs()).sum();
+        let sum: f64 = new_ranks.iter().sum();
+        assert!((1.0 - sum.abs()) < 0.0000000001f64);
+        cargo_ranks = new_ranks;
+        println!("Delta: {}", delta);
+    }
+    let mut ranks: Vec<_> = packages.iter().zip(cargo_ranks.iter().cloned()).collect();
+    ranks.sort_by(|&(_, rank1), &(_, ref rank2)| rank1.partial_cmp(rank2).unwrap().reverse());
+    ranks
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().unwrap();
     let packages = get_packages(&path);
-    let ranks = cargo_rank(&packages);
+    let limit = args.next().unwrap().parse().expect("Not a number?");
 
-    for (i, (pkg, rank)) in ranks.into_iter().take(args.next().unwrap().parse().expect("Not a number?")).enumerate() {
+    println!("loop ranks");
+    let ranks = cargo_rank(&packages);
+    for (i, (pkg, rank)) in ranks.into_iter().take(limit).enumerate() {
+        println!("{}. {} ({})", i + 1, pkg.name, rank);
+    }
+
+    println!("mat ranks");
+    let mat_ranks = mat_cargo_rank(&packages);
+    for (i, (pkg, rank)) in mat_ranks.into_iter().take(limit).enumerate() {
         println!("{}. {} ({})", i + 1, pkg.name, rank);
     }
 }
