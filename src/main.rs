@@ -71,15 +71,23 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
         new_ranks = packages.iter().map(|pkg| (&*pkg.name, (pkg, iterative_starting_rank))).collect();
         for &(pkg, rank) in cargo_ranks.values() {
             let num_deps = pkg.deps.len();
-            let boost = damp * rank / num_deps as f64;
-            for dep in &pkg.deps {
-                new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
+            let boost;
+            if num_deps == 0 { // distribute evenly when there are no deps
+                boost = damp * rank / packages.len() as f64;
+                for dep in packages.iter() {
+                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
+                }
+            } else {
+                boost = damp * rank / num_deps as f64;
+                for dep in &pkg.deps {
+                    new_ranks.get_mut(&*dep.name).unwrap().1 += boost;
+                }
             }
         }
         delta = cargo_ranks.values().map(|&(pkg, rank)| (new_ranks[&*pkg.name].1 - rank).abs()).sum();
         cargo_ranks.clear();
         let sum: f64 = new_ranks.values().map(|&(_, rank)| rank).sum();
-        assert!((1.0 - sum.abs()) < 0.0000000001f64);
+        assert!((1.0 - sum).abs() < 0.0000000001f64);
         swap(&mut cargo_ranks, &mut new_ranks);
         println!("Delta: {}", delta);
     }
@@ -95,9 +103,9 @@ fn mat_cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
     let deps: Vec<f64> = packages.iter().flat_map(|pkg| {
         let deps: HashSet<_> = pkg.deps.iter().map(|dep| &*dep.name).collect();
         let num_deps = deps.len() as f64;
-        packages.iter().map(move |dep| if deps.contains(&*dep.name) { 1.0 / num_deps } else { 0.0 })
+        packages.iter().map(move |dep| if deps.len() == 0 { 1.0 / packages.len() as f64 } else { if deps.contains(&*dep.name) { 1.0 / num_deps } else { 0.0 }})
     }).collect();
-    let deps = DMat::from_row_vec(packages.len(), packages.len(), &deps);
+    let deps = DMat::from_col_vec(packages.len(), packages.len(), &deps);
 
     let mut delta = std::f64::MAX;
     let threshold = 0.000001;
@@ -107,7 +115,7 @@ fn mat_cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
         let new_ranks = starting_ranks + (deps.clone() * cargo_ranks.clone()) * damp;
         delta = cargo_ranks.iter().zip(new_ranks.iter()).map(|(old, new)| (old - new).abs()).sum();
         let sum: f64 = new_ranks.iter().sum();
-        assert!((1.0 - sum.abs()) < 0.0000000001f64);
+        assert!((1.0 - sum).abs() < 0.0000000001f64);
         cargo_ranks = new_ranks;
         println!("Delta: {}", delta);
     }
