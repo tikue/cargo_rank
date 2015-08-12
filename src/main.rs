@@ -78,7 +78,7 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
     let threshold = 0.000001;
     let starting_ranks = DVec::from_elem(packages.len(), (1.0 - damp) / packages.len() as f64);
     while delta > threshold {
-        let new_ranks = starting_ranks.clone() + (deps.clone() * cargo_ranks.clone()) * damp;
+        let new_ranks = starting_ranks.clone() + deps.clone() * cargo_ranks.clone() * damp;
         delta = cargo_ranks.iter().zip(new_ranks.iter()).map(|(old, new)| (old - new).abs()).sum();
         println!("Delta: {}", delta);
         cargo_ranks = new_ranks;
