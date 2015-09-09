@@ -1,9 +1,8 @@
-#![feature(fs_walk, custom_derive, plugin, iter_arith, result_expect, test)]
+#![feature(fs_walk, custom_derive, plugin, iter_arith, result_expect)]
 #![plugin(serde_macros)]
 extern crate serde;
 extern crate serde_json;
 extern crate nalgebra;
-extern crate test;
 
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
@@ -98,18 +97,5 @@ fn main() {
     let ranks = cargo_rank(&packages);
     for (i, (pkg, rank)) in ranks.into_iter().take(limit).enumerate() {
         println!("{}. {} ({})", i + 1, pkg.name, rank);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{get_packages, cargo_rank};
-    use test::Bencher;
-
-    #[bench]
-    #[ignore]
-    fn bench_cargo_rank(b: &mut Bencher) {
-        let packages = get_packages("../crates.io-index/");
-        b.iter(|| cargo_rank(&packages));
     }
 }
