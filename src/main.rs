@@ -90,8 +90,9 @@ fn cargo_rank(packages: &[Package]) -> Vec<(&Package, f64)> {
 fn main() {
     let mut args = std::env::args().skip(1);
     let path = args.next().unwrap();
+    println!("Path: {}", path);
     let packages = get_packages(&path);
-    let limit = args.next().unwrap().parse().expect("Not a number?");
+    let limit = args.next().expect("How many crates to list?").parse().expect("Not a number?");
 
     println!("ranks:");
     let ranks = cargo_rank(&packages);
